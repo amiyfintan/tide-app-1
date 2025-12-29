@@ -7,10 +7,11 @@ import {
   MessageCircle, Clock, 
   ArrowRight, HelpCircle, 
   Languages, School, Calculator, PlusCircle,
-  Baby, GraduationCap, Bike
+  Building2, Tent, Utensils, Star, Smartphone,
+  Baby, GraduationCap, Bike, FileHeart
 } from 'lucide-react';
 
-// --- DATABASE CONNECTION ---
+// --- LIVE SUPABASE CONNECTION ---
 const supabaseUrl = 'https://sljifarjqsdanumqvncl.supabase.co';
 const supabaseAnonKey = 'sb_publishable_7-5-eF554a-Rw-eTIRqyXA_1fywtPO0';
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
@@ -28,10 +29,10 @@ const App = () => {
   const [showSuccess, setShowSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // New Live Registration Data
+  // Live Registration & DB States
   const [regName, setRegName] = useState('');
   const [regPhone, setRegPhone] = useState('');
-  const [liveTotal, setLiveTotal] = useState(154200500); // Fallback default
+  const [liveTotal, setLiveTotal] = useState(154200500); 
 
   // --- TRANSLATIONS ---
   const t = {
@@ -53,7 +54,7 @@ const App = () => {
       donate: "Donate",
       asnaf: "Select Beneficiary (Asnaf)",
       successMsg: "Data synced with TIDE. May Allah accept your contribution.",
-      total200: "Live 200/= Collections",
+      total200: "Total 200/= Collections",
       impact: "Impact Report",
       orphans: "Orphans",
       sheikhs: "Sheikhs",
@@ -72,7 +73,10 @@ const App = () => {
       students: "Students",
       children: "Children",
       needs: "Needs",
-      motos: "Imam Motos"
+      motos: "Imam Motos",
+      imams: "Imams",
+      ustadhs: "Ustadhs",
+      madrasas: "Madrasas"
     },
     sw: {
       welcome: "As-Salaam Alaykum",
@@ -92,7 +96,7 @@ const App = () => {
       donate: "Changia",
       asnaf: "Chagua Walengwa (Asnaf)",
       successMsg: "Taarifa zimehifadhiwa TIDE. Allah apokee mchango wako.",
-      total200: "Sadaka Mubashara (200/=)",
+      total200: "Jumla ya Sadaka ya 200/=",
       impact: "Ripoti ya Maendeleo",
       orphans: "Yatima",
       sheikhs: "Masheikh",
@@ -111,63 +115,83 @@ const App = () => {
       students: "Wanafunzi",
       children: "Watoto",
       needs: "Mahitaji",
-      motos: "Pikipiki za Maimamu"
+      motos: "Pikipiki za Maimamu",
+      imams: "Maimamu",
+      ustadhs: "Maustadhi",
+      madrasas: "Madrasa"
     }
   };
 
-  // --- FETCH LIVE TOTALS ON LOAD ---
+  // --- HARD DATA (PRESERVED) ---
+  const staticStats = {
+    registered: { sheikhs: 142, imams: 850, ustadhs: 1240, madrasas: 320, masjids: 415, mem: "2.4M" },
+    impact: { scholarships: 450, orphans_donated: 28, zakat_beneficiaries: 12500, nhif_cards: 340, motorcycles: 15 }
+  };
+
+  const directoryData = {
+    masjid: [
+      { id: 1, name: "Masjid Quba", loc: "Sinza, DSM", students: 120, hasMadrasa: true },
+      { id: 2, name: "Masjid Taqwa", loc: "Mbagala, DSM", students: 350, hasMadrasa: true },
+      { id: 3, name: "Masjid Nur", loc: "Arusha Mjini", students: 0, hasMadrasa: false }
+    ],
+    orphans: [
+      { id: 1, name: "Al-Madina Center", loc: "Kigamboni", children: 145, needs: "Rice, Oil, Books" },
+      { id: 2, name: "Ummah Care", loc: "Tanga", children: 55, needs: "Medicine, Beds" }
+    ],
+    sheikhs: [
+      { id: 1, name: "Sheikh Walid", loc: "Ilala", spec: "Fiqh & Mirath" },
+      { id: 2, name: "Dr. Suleiman", loc: "Zanzibar", spec: "Islamic Finance" }
+    ],
+    waqf: [
+      { id: 1, name: "Commercial Building", loc: "Kariakoo", owner: "Late Hajj Mussa" },
+      { id: 2, name: "Water Well", loc: "Handeni", owner: "TIDE Community Pool" }
+    ]
+  };
+
+  const scholarships = {
+    circular: [
+      { id: 1, title: "TIDE STEM Grant", inst: "UDSM", amt: "100%" },
+      { id: 2, title: "Azam Medical", inst: "MUHAS", amt: "Full" }
+    ],
+    islamic: [
+      { id: 3, title: "Al-Azhar Grant", inst: "Egypt", amt: "Full" },
+      { id: 4, title: "Madrasa Teacher", inst: "Local", amt: "Stipend" }
+    ]
+  };
+
+  // --- LIVE SYNC LOGIC ---
   const fetchLiveStats = async () => {
     try {
-      const { data, error } = await supabase.from('donations').select('amount');
-      if (!error && data) {
+      const { data } = await supabase.from('donations').select('amount');
+      if (data) {
         const sum = data.reduce((acc, curr) => acc + (curr.amount || 0), 0);
         if (sum > 0) setLiveTotal(sum);
       }
     } catch (e) { console.error(e); }
   };
 
-  useEffect(() => {
-    fetchLiveStats();
-  }, []);
+  useEffect(() => { fetchLiveStats(); }, []);
 
-  // --- LIVE SYNC FUNCTION ---
   const handleLiveSync = async (type, category = "General") => {
     setLoading(true);
     try {
-      // 1. REGISTER USER
       if (regPhone) {
-        await supabase.from('members').upsert([
-          { full_name: regName, phone_number: regPhone, role: 'Donor' }
-        ], { onConflict: 'phone_number' });
+        await supabase.from('members').upsert([{ full_name: regName, phone_number: regPhone, role: 'Donor' }], { onConflict: 'phone_number' });
       }
-
-      // 2. SAVE DONATION
-      const { error } = await supabase.from('donations').insert([
-        { 
-          donor_name: regName || "Mtoaji", 
-          amount: parseInt(amount) || 200, 
-          type: type, 
-          asnaf: category 
-        }
-      ]);
-
+      const { error } = await supabase.from('donations').insert([{ 
+        donor_name: regName || "Mtoaji", amount: parseInt(amount) || 200, type: type, asnaf: category 
+      }]);
       if (error) throw error;
-      
-      await fetchLiveStats(); // Refresh the total counter
-      setShowZakatModal(false);
-      setShowDonateModal(false);
-      setShowSuccess(true);
-    } catch (err) {
-      alert(`Error: ${err.message}`);
-    } finally {
-      setLoading(false);
-    }
+      await fetchLiveStats();
+      setShowZakatModal(false); setShowDonateModal(false); setShowSuccess(true);
+    } catch (err) { alert(`Error: ${err.message}`); }
+    finally { setLoading(false); }
   };
 
   const formatCurrency = (val) => new Intl.NumberFormat('en-TZ', { style: 'currency', currency: 'TZS', maximumFractionDigits: 0 }).format(val);
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] font-sans pb-24 max-w-md mx-auto relative flex flex-col shadow-2xl">
+    <div className="min-h-screen bg-[#F8FAFC] font-sans pb-24 max-w-md mx-auto relative flex flex-col shadow-2xl overflow-hidden">
       
       {/* HEADER */}
       <div className="bg-white pt-4 pb-2 px-4 border-b border-gray-100 sticky top-0 z-30 flex justify-between items-center shadow-sm">
@@ -187,7 +211,7 @@ const App = () => {
           <div className="animate-in fade-in">
             <div className="bg-gradient-to-br from-emerald-800 to-emerald-600 text-white p-6 rounded-b-[2.5rem] shadow-lg mb-6">
               <p className="text-emerald-100 text-[10px] uppercase font-bold tracking-widest">{t[lang].welcome}</p>
-              <h1 className="text-2xl font-black mb-6">{regName || "Mgeni"}</h1>
+              <h1 className="text-2xl font-black mb-6">{regName || "User"}</h1>
               <div className="bg-white text-gray-800 rounded-3xl p-5 shadow-xl flex divide-x divide-gray-100">
                 <div className="flex-1 text-center">
                   <p className="text-[10px] text-gray-400 uppercase font-black">{t[lang].mySadaka}</p>
@@ -201,9 +225,10 @@ const App = () => {
             </div>
 
             <div className="px-5 space-y-4">
+               {/* Live Counter on Home */}
                <div className="bg-white p-5 rounded-[2rem] border border-gray-100 shadow-sm text-center">
                   <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1">{t[lang].total200}</p>
-                  <p className="text-2xl font-black text-emerald-600 animate-pulse">{formatCurrency(liveTotal)}</p>
+                  <p className="text-2xl font-black text-emerald-600">{formatCurrency(liveTotal)}</p>
                </div>
 
                <div className="bg-white p-5 rounded-[2rem] border border-gray-100 shadow-sm">
@@ -213,7 +238,7 @@ const App = () => {
                   <div className="grid grid-cols-2 gap-3">
                      {[200, 1400, 6000, 72000].map((amt, i) => (
                         <button key={i} onClick={() => {setAmount(amt); setShowDonateModal(true)}} className="p-4 bg-gray-50 rounded-2xl border border-gray-100 hover:bg-emerald-50 transition-all">
-                           <p className="text-[9px] text-gray-400 font-bold uppercase">{['Daily', 'Weekly', 'Monthly', 'Yearly'][i]}</p>
+                           <p className="text-[9px] text-gray-400 font-bold uppercase tracking-tight">{['Daily', 'Weekly', 'Monthly', 'Yearly'][i]}</p>
                            <p className="font-black text-gray-800 text-sm">{amt}/=</p>
                         </button>
                      ))}
@@ -234,7 +259,7 @@ const App = () => {
           </div>
         )}
 
-        {/* === IMPACT TAB === */}
+        {/* === FULL IMPACT / STATS TAB (FIXED: ALL ITEMS RESTORED) === */}
         {activeTab === 'impact' && (
            <div className="p-5 space-y-6 animate-in fade-in pb-10">
               <div className="bg-white p-6 rounded-[2.5rem] border border-gray-100 shadow-sm text-center">
@@ -242,27 +267,49 @@ const App = () => {
                  <p className="text-3xl font-black text-emerald-600">{formatCurrency(liveTotal)}</p>
               </div>
 
+              {/* Registered Network Section */}
+              <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
+                 <h3 className="font-bold text-sm mb-4 flex items-center gap-2 text-gray-800"><Users size={16}/> Registered Network</h3>
+                 <div className="grid grid-cols-2 gap-4">
+                    {Object.entries(staticStats.registered).map(([key, val], i) => (
+                       <div key={i} className="bg-gray-50 p-3 rounded-2xl">
+                          <p className="text-xl font-black text-gray-800">{val}</p>
+                          <p className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter">{t[lang][key] || key}</p>
+                       </div>
+                    ))}
+                 </div>
+              </div>
+
+              {/* Detailed Impact Report Section */}
               <div className="bg-emerald-900 text-white p-6 rounded-[2rem] shadow-xl">
                  <h3 className="font-bold text-sm mb-4 flex items-center gap-2 uppercase tracking-widest"><Activity size={16}/> {t[lang].impact}</h3>
                  <div className="space-y-4">
                     <div className="flex justify-between items-center border-b border-white/10 pb-2">
-                       <span className="text-xs opacity-70">Zakat Beneficiaries</span>
-                       <span className="font-black text-emerald-300">12.5k</span>
+                       <span className="text-xs opacity-70">{t[lang].sch}</span>
+                       <span className="font-black">{staticStats.impact.scholarships}</span>
                     </div>
                     <div className="flex justify-between items-center border-b border-white/10 pb-2">
-                       <span className="text-xs opacity-70">NHIF Support</span>
-                       <span className="font-black text-amber-400">340</span>
+                       <span className="text-xs opacity-70">{t[lang].orphans} Donated</span>
+                       <span className="font-black">{staticStats.impact.orphans_donated}</span>
+                    </div>
+                    <div className="flex justify-between items-center border-b border-white/10 pb-2">
+                       <span className="text-xs opacity-70">{t[lang].beneficiaries} (Zakat)</span>
+                       <span className="font-black text-emerald-300">{staticStats.impact.zakat_beneficiaries}</span>
+                    </div>
+                    <div className="flex justify-between items-center border-b border-white/10 pb-2">
+                       <span className="text-xs opacity-70">{t[lang].nhif}</span>
+                       <span className="font-black text-amber-400">{staticStats.impact.nhif_cards}</span>
                     </div>
                     <div className="flex justify-between items-center">
-                       <span className="text-xs opacity-70">Imam Motorcycles</span>
-                       <span className="font-black text-amber-400">15</span>
+                       <span className="text-xs opacity-70">{t[lang].motos}</span>
+                       <span className="font-black text-amber-400">{staticStats.impact.motorcycles}</span>
                     </div>
                  </div>
               </div>
            </div>
         )}
 
-        {/* === UMMAH TAB === */}
+        {/* === FULL UMMAH / CONNECT TAB (FIXED: ALL DETAILS RESTORED) === */}
         {activeTab === 'connect' && (
            <div className="p-4 space-y-5 animate-in fade-in">
               <div className="flex space-x-2 overflow-x-auto pb-2 no-scrollbar">
@@ -273,48 +320,54 @@ const App = () => {
                 ))}
              </div>
 
-             {/* Education */}
              {connectTab === 'education' && (
                 <div className="space-y-4">
                    <div className="flex gap-2 bg-gray-100 p-1.5 rounded-2xl">
                       <button onClick={() => setEduFilter('circular')} className={`flex-1 py-2.5 rounded-xl text-[10px] font-bold flex items-center justify-center gap-2 ${eduFilter === 'circular' ? 'bg-white shadow-sm text-emerald-700' : 'text-gray-500'}`}><School size={14}/> {t[lang].circular}</button>
                       <button onClick={() => setEduFilter('islamic')} className={`flex-1 py-2.5 rounded-xl text-[10px] font-bold flex items-center justify-center gap-2 ${eduFilter === 'islamic' ? 'bg-white shadow-sm text-emerald-700' : 'text-gray-500'}`}><BookOpen size={14}/> {t[lang].islamic}</button>
                    </div>
-                   {[1,2].map(i => (
-                     <div key={i} className="bg-white p-4 rounded-2xl border border-gray-100 flex justify-between items-center">
-                        <div><p className="text-xs font-bold text-gray-800">Grant #{i}</p><p className="text-[10px] text-gray-400">TIDE Global</p></div>
+                   {scholarships[eduFilter].map(i => (
+                     <div key={i.id} className="bg-white p-4 rounded-2xl border border-gray-100 flex justify-between items-center">
+                        <div><p className="text-xs font-bold text-gray-800">{i.title}</p><p className="text-[10px] text-gray-400">{i.inst} - {i.amt}</p></div>
                         <button className="bg-emerald-50 text-emerald-600 text-[10px] font-black px-4 py-2 rounded-xl uppercase">{t[lang].apply}</button>
                      </div>
                    ))}
                 </div>
              )}
 
-             {/* Masjid */}
              {connectTab === 'masjid' && (
                 <div className="space-y-3">
-                   {[
-                     { name: "Masjid Quba", loc: "Sinza", stu: 120 },
-                     { name: "Masjid Nur", loc: "Arusha", stu: 85 }
-                   ].map((m, i) => (
-                      <div key={i} className="bg-white p-5 rounded-3xl border border-gray-100">
-                         <div className="flex justify-between items-start mb-2"><h3 className="font-bold text-gray-800">{m.name}</h3><span className="bg-blue-50 text-blue-600 text-[9px] font-black px-2 py-1 rounded-md uppercase">Madrasa Active</span></div>
+                   {directoryData.masjid.map((m, i) => (
+                      <div key={i} className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm">
+                         <div className="flex justify-between items-start mb-2">
+                             <h3 className="font-bold text-gray-800">{m.name}</h3>
+                             {m.hasMadrasa && <span className="bg-blue-50 text-blue-600 text-[9px] font-black px-2 py-1 rounded-md uppercase">MADRASA</span>}
+                         </div>
                          <p className="text-[10px] text-gray-500 flex items-center gap-1 mb-3"><MapPin size={10}/> {m.loc}</p>
-                         <div className="bg-gray-50 p-3 rounded-2xl flex justify-between items-center"><p className="text-[9px] font-bold text-gray-400 uppercase">{t[lang].students}</p><p className="text-xs font-black text-gray-800">{m.stu}</p></div>
+                         <div className="bg-gray-50 p-3 rounded-2xl flex justify-between items-center">
+                            <div className="flex items-center gap-2"><GraduationCap size={16} className="text-gray-400"/><span className="text-[9px] font-bold text-gray-400 uppercase">{t[lang].students}</span></div>
+                            <p className="text-xs font-black text-gray-800">{m.students}</p>
+                         </div>
                       </div>
                    ))}
                 </div>
              )}
 
-             {/* Orphans */}
              {connectTab === 'orphans' && (
                 <div className="space-y-3">
-                   {[
-                     { name: "Al-Madina Center", loc: "Kigamboni", children: 145, needs: "Rice, Oil" }
-                   ].map((o, i) => (
-                      <div key={i} className="bg-white p-5 rounded-3xl border border-gray-100">
+                   {directoryData.orphans.map((o, i) => (
+                      <div key={i} className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm">
                          <h3 className="font-bold text-gray-800 mb-2">{o.name}</h3>
-                         <div className="flex gap-4 mb-3"><div className="flex items-center gap-1 bg-emerald-50 px-2 py-1 rounded-lg"><Baby size={12} className="text-emerald-600"/><span className="text-[10px] font-bold text-emerald-700">{o.children} {t[lang].children}</span></div></div>
-                         <div className="border-t pt-2"><p className="text-[9px] font-bold text-red-400 uppercase">{t[lang].needs}:</p><p className="text-xs font-bold text-gray-700">{o.needs}</p></div>
+                         <div className="flex gap-4 mb-3">
+                            <div className="flex items-center gap-1 bg-emerald-50 px-2 py-1 rounded-lg">
+                               <Baby size={12} className="text-emerald-600"/><span className="text-[10px] font-bold text-emerald-700">{o.children} {t[lang].children}</span>
+                            </div>
+                            <p className="text-[10px] text-gray-400 flex items-center gap-1"><MapPin size={10}/> {o.loc}</p>
+                         </div>
+                         <div className="border-t pt-2 mt-2">
+                            <p className="text-[9px] font-bold text-red-400 uppercase">{t[lang].needs}:</p>
+                            <p className="text-xs font-bold text-gray-700">{o.needs}</p>
+                         </div>
                       </div>
                    ))}
                 </div>
@@ -355,7 +408,7 @@ const App = () => {
         ))}
       </div>
 
-      {/* ZAKAT MODAL */}
+      {/* ZAKAT MODAL (WITH FULL STEPS & REGISTRATION) */}
       {showZakatModal && (
          <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-md flex items-end">
             <div className="bg-white w-full h-[85vh] rounded-t-[3rem] p-8 animate-in slide-in-from-bottom flex flex-col shadow-2xl">
@@ -366,38 +419,34 @@ const App = () => {
                
                <div className="flex-1 overflow-y-auto pb-10">
                   {zakatStep === 1 && (
-                    <div className="space-y-4 animate-in fade-in">
+                    <div className="space-y-4">
                        <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">{t[lang].regTitle}</p>
-                       <input type="text" onChange={(e) => setRegName(e.target.value)} placeholder="Full Name" className="w-full bg-gray-50 p-5 rounded-2xl font-bold border-none focus:ring-2 ring-emerald-500" />
-                       <input type="tel" onChange={(e) => setRegPhone(e.target.value)} placeholder="Phone (+255...)" className="w-full bg-gray-50 p-5 rounded-2xl font-bold border-none focus:ring-2 ring-emerald-500" />
-                       <button onClick={() => setZakatStep(2)} className="w-full bg-emerald-600 text-white font-black py-5 rounded-2xl mt-4 shadow-lg flex items-center justify-center gap-2">
-                          {lang === 'en' ? 'Continue' : 'Endelea'} <ArrowRight size={18}/>
-                       </button>
+                       <input type="text" onChange={(e) => setRegName(e.target.value)} placeholder="Full Name" className="w-full bg-gray-50 p-5 rounded-2xl font-bold border-none" />
+                       <input type="tel" onChange={(e) => setRegPhone(e.target.value)} placeholder="Phone (+255...)" className="w-full bg-gray-50 p-5 rounded-2xl font-bold border-none" />
+                       <button onClick={() => setZakatStep(2)} className="w-full bg-emerald-600 text-white font-black py-5 rounded-2xl mt-4">Continue</button>
                     </div>
                   )}
 
                   {zakatStep === 2 && (
-                    <div className="space-y-4 animate-in slide-in-from-right">
+                    <div className="space-y-4">
                        <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest">{t[lang].calcTitle}</p>
                        <div className="bg-amber-50 p-6 rounded-[2rem] text-center border border-amber-100">
-                          <p className="text-[10px] text-amber-800 font-bold mb-2">Estimated Zakat (2.5%)</p>
                           <p className="text-3xl font-black text-amber-600">{formatCurrency(amount * 0.025 || 0)}</p>
                        </div>
-                       <input type="number" onChange={(e) => setAmount(e.target.value)} placeholder="Total Asset Value (TZS)" className="w-full bg-gray-50 p-5 rounded-2xl font-black text-center text-xl border-none focus:ring-2 ring-amber-500" />
-                       <button onClick={() => setZakatStep(3)} className="w-full bg-emerald-600 text-white font-black py-5 rounded-2xl mt-4 shadow-lg uppercase">{lang === 'en' ? 'Select Category' : 'Chagua Walengwa'}</button>
+                       <input type="number" onChange={(e) => setAmount(e.target.value)} placeholder="Asset Value (TZS)" className="w-full bg-gray-50 p-5 rounded-2xl font-black text-center text-xl border-none" />
+                       <button onClick={() => setZakatStep(3)} className="w-full bg-emerald-600 text-white font-black py-5 rounded-2xl mt-4 uppercase">Select Beneficiary</button>
                     </div>
                   )}
 
                   {zakatStep === 3 && (
-                    <div className="space-y-3 animate-in slide-in-from-right">
-                       <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">{t[lang].asnaf}</p>
-                       {["The Poor", "The Needy", "Debt Relief", "Way of Allah"].map(cat => (
-                          <div key={cat} onClick={() => handleLiveSync('Zakat', cat)} className="p-5 bg-white border border-gray-100 rounded-2xl flex items-center justify-between active:bg-emerald-50 cursor-pointer transition-all">
-                             <span className="font-bold text-gray-700 text-sm">{cat}</span>
-                             <div className="w-6 h-6 rounded-full border-2 border-emerald-500"></div>
+                    <div className="space-y-3">
+                       {["The Poor", "Needy", "Debt", "Way of Allah"].map(cat => (
+                          <div key={cat} onClick={() => handleLiveSync('Zakat', cat)} className="p-5 bg-white border border-gray-100 rounded-2xl flex items-center justify-between cursor-pointer active:bg-emerald-50">
+                             <span className="font-bold text-gray-700">{cat}</span>
+                             <PlusCircle className="text-emerald-500" size={20}/>
                           </div>
                        ))}
-                       {loading && <p className="text-center text-xs font-black text-emerald-600 animate-pulse uppercase pt-4">Processing...</p>}
+                       {loading && <p className="text-center text-xs font-black text-emerald-600 animate-pulse">SYNCING TO CLOUD...</p>}
                     </div>
                   )}
                </div>
@@ -405,32 +454,31 @@ const App = () => {
          </div>
       )}
 
-      {/* SADAKA MODAL */}
+      {/* SADAKA MODAL (WITH REGISTRATION) */}
       {showDonateModal && (
         <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-md flex items-end">
           <div className="bg-white w-full rounded-t-[3.5rem] p-10 shadow-2xl animate-in slide-in-from-bottom">
             <h2 className="text-xl font-black text-gray-800 mb-6">{t[lang].giveSadaka}</h2>
             <div className="bg-emerald-50 p-6 rounded-[2rem] text-center mb-8 border border-emerald-100">
-               <p className="text-xs font-bold text-emerald-600 uppercase mb-1">Amount</p>
                <p className="text-4xl font-black text-emerald-700">{formatCurrency(amount)}</p>
             </div>
-            {/* Input Name for Registration during Sadaka */}
-            <input type="text" onChange={(e) => setRegName(e.target.value)} placeholder="Name (Optional)" className="w-full bg-gray-50 p-4 rounded-xl mb-4 font-bold border-none" />
-            <input type="tel" onChange={(e) => setRegPhone(e.target.value)} placeholder="Phone (Optional)" className="w-full bg-gray-50 p-4 rounded-xl mb-6 font-bold border-none" />
-            
-            <button onClick={() => handleLiveSync('Sadaka', 'General')} className="w-full bg-emerald-600 text-white font-black py-6 rounded-full shadow-xl mb-4 text-sm uppercase tracking-widest">{loading ? '...' : t[lang].donate}</button>
-            <button onClick={() => setShowDonateModal(false)} className="w-full text-gray-400 text-[10px] font-black uppercase tracking-widest">Cancel</button>
+            <div className="space-y-3 mb-6">
+                <input type="text" onChange={(e) => setRegName(e.target.value)} placeholder="Full Name" className="w-full bg-gray-50 p-4 rounded-xl font-bold border-none text-sm" />
+                <input type="tel" onChange={(e) => setRegPhone(e.target.value)} placeholder="Phone Number" className="w-full bg-gray-50 p-4 rounded-xl font-bold border-none text-sm" />
+            </div>
+            <button onClick={() => handleLiveSync('Sadaka', 'General')} className="w-full bg-emerald-600 text-white font-black py-6 rounded-full shadow-xl mb-4 uppercase tracking-widest text-sm">{loading ? '...' : t[lang].donate}</button>
+            <button onClick={() => setShowDonateModal(false)} className="w-full text-gray-400 text-[10px] font-black uppercase">Cancel</button>
           </div>
         </div>
       )}
 
       {/* SUCCESS SCREEN */}
       {showSuccess && (
-        <div className="fixed inset-0 z-[100] bg-emerald-600 flex flex-col items-center justify-center text-white text-center p-12 animate-in fade-in">
+        <div className="fixed inset-0 z-[100] bg-emerald-600 flex flex-col items-center justify-center text-white text-center p-12">
           <CheckCircle size={80} className="mb-6 animate-bounce" />
           <h2 className="text-4xl font-black mb-4 uppercase tracking-tighter">Shukran!</h2>
-          <p className="text-emerald-100 text-lg mb-12 font-medium opacity-90">{t[lang].successMsg}</p>
-          <button onClick={() => setShowSuccess(false)} className="bg-white text-emerald-700 px-16 py-5 rounded-full font-black text-sm uppercase shadow-2xl active:scale-95 transition-all">Return</button>
+          <p className="text-emerald-100 text-lg mb-12 font-medium">{t[lang].successMsg}</p>
+          <button onClick={() => setShowSuccess(false)} className="bg-white text-emerald-700 px-16 py-5 rounded-full font-black text-sm uppercase shadow-2xl">Return</button>
         </div>
       )}
     </div>
